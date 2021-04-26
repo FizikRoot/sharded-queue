@@ -1,21 +1,19 @@
-package = 'sharded-queue'
+package = 'queue-test'
 version = 'scm-1'
 source  = {
-    url = 'git+https://github.com/tarantool/sharded-queue.git';
-    branch = 'master';
+    url = '/dev/null',
 }
+-- Put any modules your app depends on here
 dependencies = {
-    'lua >= 5.1';
-    'checks >= 3.0.0',
-    'cartridge >= 2.0.0, < 3.0.0',
+    'tarantool',
+    'lua >= 5.1',
+    'checks == 3.1.0-1',
+    'cartridge == 2.5.1-1',
+    'metrics == 0.7.1-1',
+    'cartridge-cli-extensions == 1.1.1-1',
+    'expirationd',
+    'vshard',
 }
-
-external_dependencies = {
-    TARANTOOL = {
-        header = 'tarantool/module.h';
-    };
-}
-
 build = {
     type = 'make',
 	build_target = 'all',

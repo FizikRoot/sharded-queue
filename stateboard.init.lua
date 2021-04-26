@@ -2,8 +2,6 @@
 
 require('strict').on()
 
--- configure path so that you can run application
--- from outside the root directory
 if package.setsearchroot ~= nil then
     package.setsearchroot()
 else
@@ -13,7 +11,7 @@ else
     -- the current working directory and whatever is specified in
     -- package.path and package.cpath. If you run your app while in the
     -- root directory of that app, everything goes fine, but if you try to
-    -- start your app with "tarantool myapp/init.lua", it will fail to load
+    -- start stateboard with "tarantool myapp/stateboard.init.lua", it will fail to load
     -- its modules, and modules from myapp/.rocks.
     local fio = require('fio')
     local app_dir = fio.abspath(fio.dirname(arg[0]))
@@ -27,37 +25,4 @@ else
     package.cpath = app_dir .. '/.rocks/lib/tarantool/?.dylib;' .. package.cpath
 end
 
--- configure cartridge
-
-local cartridge = require('cartridge')
-
-local ok, err = cartridge.cfg({
-    roles = {
-        'cartridge.roles.vshard-storage',
-        'cartridge.roles.vshard-router',
-        'cartridge.roles.metrics',
-        'sharded_queue.storage',
-        'sharded_queue.api'
-    },
-    cluster_cookie = 'queue-test-cluster-cookie',
-})
-
-assert(ok, tostring(err))
-
--- register admin function to use it with 'cartridge admin' command
-
-local admin = require('app.admin')
-admin.init()
-
-local metrics = require('cartridge.roles.metrics')
-metrics.set_export({
-    {
-        path = '/metrics',
-        format = 'prometheus'
-    },
-    {
-        path = '/health',
-        format = 'health'
-    }
-})
-
+require('cartridge.stateboard').cfg()
