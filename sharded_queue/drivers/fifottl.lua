@@ -222,13 +222,13 @@ local function tube_create(args)
         if_not_exists = if_not_exists
     })
 
-    if args.options.ContentBasedDeduplication == true then
+    if args.options.content_based_deduplication == true then
         local deduplication_opts = {}
         deduplication_opts.temporary = args.options.temporary or false
         deduplication_opts.if_not_exists = if_not_exists
         deduplication_opts.engine = args.options.engine or 'memtx'
         deduplication_opts.format = {
-            { name = 'deduplication_id', type = 'unsigned' },
+            { name = 'deduplication_id', type = 'string' },
             { name = 'created', type = 'unsigned' },
             { name = 'bucket_id', type = 'unsigned' }
         }
@@ -314,8 +314,8 @@ function method.put(args)
             next_event = time.event(ttl)
         end
 
-        if args.MessageDeduplicationId ~= nil or args.options.MessageDeduplicationId ~= nil then
-            local key = args.MessageDeduplicationId or args.options.MessageDeduplicationId
+        if args.message_deduplication_id ~= nil or args.options.message_deduplication_id ~= nil then
+            local key = args.message_deduplication_id or args.options.message_deduplication_id
             get_deduplication_space(args):insert {key, time.cur(), args.bucket_id}
         end
 
