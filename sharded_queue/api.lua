@@ -2,6 +2,7 @@ local cartridge = require('cartridge')
 local vshard = require('vshard')
 local fiber = require('fiber')
 local log = require('log')
+local hash = require('vshard.hash')
 
 local time = require('sharded_queue.time')
 local utils = require('sharded_queue.utils')
@@ -52,6 +53,7 @@ local sharded_tube = {}
 function sharded_tube.put(self, data, options)
     local bucket_count = vshard.router.bucket_count()
     local bucket_id = 0
+    local task_id = 0
     options = options or {}
     if self.deduplicated == true then
         local key = {}
@@ -61,7 +63,7 @@ function sharded_tube.put(self, data, options)
             key = hash.mpcrc32(data)
         end
         options.MessageDeduplicationId = key
-        bucket_id, _ = utils.unpack_task_id(key, bucket_count)
+        bucket_id, task_id = utils.unpack_task_id(key, bucket_count)
     else
         bucket_id = math.random(bucket_count)
     end

@@ -88,28 +88,28 @@ local function tube_create(opts)
             { name = 'created', type = 'unsigned' },
             { name = 'bucket_id', type = 'unsigned' }
         }
-        local deduplication = box.schema.create_space(opts.name + "_deduplication", deduplication_opts)
+        local deduplication = box.schema.create_space(opts.name .. "_deduplication", deduplication_opts)
         deduplication:create_index('deduplication_id', {
             type = 'tree',
-            parts = { 'deduplication_id', 'unsigned' },
+            parts = { 'deduplication_id' },
             unique = true,
             if_not_exists = if_not_exists
         })
         deduplication:create_index('created', {
             type = 'tree',
-            parts = { 'created', 'unsigned' },
+            parts = { 'created' },
             unique = false,
             if_not_exists = if_not_exists
         })
         deduplication:create_index('bucket_id', {
             type = 'tree',
-            parts = { 'bucket_id', 'unsigned' },
+            parts = { 'bucket_id' },
             unique = false,
             if_not_exists = if_not_exists
         })
 
         -- run fiber for deduplication event
-        fiber.create(fiber_common, opts.name + "_deduplication")
+        fiber.create(fiber_common, opts.name .. "_deduplication")
     end
 
     return space
@@ -128,7 +128,7 @@ local function get_space(args)
 end
 
 local function get_deduplication_space(args)
-    return get_space_by_name(args.tube_name + '_deduplication')
+    return get_space_by_name(args.tube_name .. '_deduplication')
 end
 
 local function get_index(args)

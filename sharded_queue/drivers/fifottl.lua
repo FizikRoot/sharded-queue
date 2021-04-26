@@ -111,7 +111,7 @@ local function fiber_iteration(tube_name, processed)
     end
 
     -- delete old tasks
-    task = box.space[tube_name + "_deduplication"].index.created:min()
+    task = box.space[tube_name .. "_deduplication"].index.created:min()
     if task then
         if task[dedup_index.created] < cur - time.DEDUPLICATION_TIME then
             processed = processed + 1
@@ -232,28 +232,28 @@ local function tube_create(args)
             { name = 'created', type = 'unsigned' },
             { name = 'bucket_id', type = 'unsigned' }
         }
-        local deduplication = box.schema.create_space(args.name + "_deduplication", deduplication_opts)
+        local deduplication = box.schema.create_space(args.name .. "_deduplication", deduplication_opts)
         deduplication:create_index('deduplication_id', {
             type = 'tree',
-            parts = { 'deduplication_id', 'unsigned' },
+            parts = { 'deduplication_id' },
             unique = true,
             if_not_exists = if_not_exists
         })
         deduplication:create_index('created', {
             type = 'tree',
-            parts = { 'created', 'unsigned' },
+            parts = { 'created' },
             unique = false,
             if_not_exists = if_not_exists
         })
         deduplication:create_index('bucket_id', {
             type = 'tree',
-            parts = { 'bucket_id', 'unsigned' },
+            parts = { 'bucket_id' },
             unique = false,
             if_not_exists = if_not_exists
         })
 
         -- run fiber for deduplication event
-        fiber.create(fiber_common, args.name + "_deduplication")
+        fiber.create(fiber_common, args.name .. "_deduplication")
     end
 
     -- run fiber for tracking event
@@ -276,6 +276,14 @@ end
 local function normalize_task(task)
     if task == nil then return nil end
     return { task.task_id, task.status, task.data }
+end
+
+local function get_space_by_name(name)
+    return box.space[name]
+end
+
+local function get_deduplication_space(args)
+    return get_space_by_name(args.tube_name .. '_deduplication')
 end
 
 local method = {}
@@ -304,6 +312,11 @@ function method.put(args)
             next_event = time.event(delay)
         else
             next_event = time.event(ttl)
+        end
+
+        if args.MessageDeduplicationId ~= nil or args.options.MessageDeduplicationId ~= nil then
+            local key = args.MessageDeduplicationId or args.options.MessageDeduplicationId
+            get_deduplication_space(args):insert {key, time.cur(), args.bucket_id}
         end
 
         return box.space[args.tube_name]:insert {
