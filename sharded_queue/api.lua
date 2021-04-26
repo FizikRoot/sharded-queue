@@ -57,12 +57,13 @@ function sharded_tube.put(self, data, options)
     options = options or {}
     if self.deduplicated == true then
         local key = {}
-        if data == 'table' and data.MessageDeduplicationId ~= nil then -- add config
-            key = data.MessageDeduplicationId
+        if type(data) == 'table' and data.message_deduplication_id ~= nil then -- add config
+            key = hash.mpcrc32(data.message_deduplication_id)
+            options.message_deduplication_id = data.message_deduplication_id
         else
             key = hash.mpcrc32(data)
+            options.message_deduplication_id = tostring(key)
         end
-        options.MessageDeduplicationId = key
         bucket_id, task_id = utils.unpack_task_id(key, bucket_count)
     else
         bucket_id = math.random(bucket_count)
@@ -458,6 +459,17 @@ function sharded_queue.statistics(tube_name)
     return stat
 end
 
+function sharded_queue.get_all_statistics()
+    local stats = {}
+    for tube_name, _ in pairs(sharded_queue.tube) do
+        local stat = sharded_queue.statistics(tube_name)
+        if stat ~= nil then
+            stats[tube_name] = stat
+        end
+    end
+    return stats
+end
+
 function sharded_queue.create_tube(tube_name, options)
     local tubes = cartridge.config_get_deepcopy('tubes') or {}
 
@@ -496,7 +508,7 @@ local function apply_config(cfg, opts)
                 wait_max = options.wait_max,
                 wait_factor = options.wait_factor or time.DEFAULT_WAIT_FACTOR,
                 log_request = utils.normalize.log_request(options.log_request),
-                deduplicated = options.ContentBasedDeduplication or false,
+                deduplicated = options.content_based_deduplication or false,
             }, {
                 __index = sharded_tube
             })
@@ -538,6 +550,7 @@ return {
     peek = queue_action_wrapper('peek'),
     drop = queue_action_wrapper('drop'),
     statistics = sharded_queue.statistics,
+    get_all_statistics = sharded_queue.get_all_statistics,
 
     dependencies = {
         'cartridge.roles.vshard-router',
