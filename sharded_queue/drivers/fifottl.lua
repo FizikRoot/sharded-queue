@@ -18,6 +18,12 @@ local index = {
     index      = 10
 }
 
+local dedup_index = {
+    deduplication_id  = 1,
+    created           = 2,
+    bucket_id         = 3
+}
+
 local function update_stat(tube_name, name)
     statistics.update(tube_name, name, '+', 1)
 end
@@ -100,6 +106,19 @@ local function fiber_iteration(tube_name, processed)
             processed = processed + 1
         else
             local e = time.sec(tonumber(task[index.next_event] - cur))
+            estimated = e < estimated and e or estimated
+        end
+    end
+
+    -- delete old tasks
+    task = box.space[tube_name + "_deduplication"].index.created:min()
+    if task then
+        if task[dedup_index.created] < cur - time.DEDUPLICATION_TIME then
+            processed = processed + 1
+            estimated = 0
+            box.space[tube_name]:delete(tuple[1])
+        else
+            local e = time.sec(tonumber(task[dedup_index.created] - cur + time.DEDUPLICATION_TIME))
             estimated = e < estimated and e or estimated
         end
     end
@@ -202,6 +221,40 @@ local function tube_create(args)
         unique = false,
         if_not_exists = if_not_exists
     })
+
+    if args.options.ContentBasedDeduplication == true then
+        local deduplication_opts = {}
+        deduplication_opts.temporary = args.options.temporary or false
+        deduplication_opts.if_not_exists = if_not_exists
+        deduplication_opts.engine = args.options.engine or 'memtx'
+        deduplication_opts.format = {
+            { name = 'deduplication_id', type = 'unsigned' },
+            { name = 'created', type = 'unsigned' },
+            { name = 'bucket_id', type = 'unsigned' }
+        }
+        local deduplication = box.schema.create_space(args.name + "_deduplication", deduplication_opts)
+        deduplication:create_index('deduplication_id', {
+            type = 'tree',
+            parts = { 'deduplication_id', 'unsigned' },
+            unique = true,
+            if_not_exists = if_not_exists
+        })
+        deduplication:create_index('created', {
+            type = 'tree',
+            parts = { 'created', 'unsigned' },
+            unique = false,
+            if_not_exists = if_not_exists
+        })
+        deduplication:create_index('bucket_id', {
+            type = 'tree',
+            parts = { 'bucket_id', 'unsigned' },
+            unique = false,
+            if_not_exists = if_not_exists
+        })
+
+        -- run fiber for deduplication event
+        fiber.create(fiber_common, args.name + "_deduplication")
+    end
 
     -- run fiber for tracking event
     fiber.create(fiber_common, args.name)

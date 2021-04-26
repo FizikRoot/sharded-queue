@@ -51,9 +51,20 @@ local sharded_tube = {}
 
 function sharded_tube.put(self, data, options)
     local bucket_count = vshard.router.bucket_count()
-    local bucket_id = math.random(bucket_count)
-
+    local bucket_id = 0
     options = options or {}
+    if self.deduplicated == true then
+        local key = {}
+        if data == 'table' and data.MessageDeduplicationId ~= nil then -- add config
+            key = data.MessageDeduplicationId
+        else
+            key = hash.mpcrc32(data)
+        end
+        options.MessageDeduplicationId = key
+        bucket_id, _ = utils.unpack_task_id(key, bucket_count)
+    else
+        bucket_id = math.random(bucket_count)
+    end
 
     if options.priority == nil and options.pri ~= nil then
         options.priority = options.pri
@@ -483,6 +494,7 @@ local function apply_config(cfg, opts)
                 wait_max = options.wait_max,
                 wait_factor = options.wait_factor or time.DEFAULT_WAIT_FACTOR,
                 log_request = utils.normalize.log_request(options.log_request),
+                deduplicated = options.ContentBasedDeduplication or false,
             }, {
                 __index = sharded_tube
             })
