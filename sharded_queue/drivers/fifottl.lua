@@ -111,15 +111,18 @@ local function fiber_iteration(tube_name, processed)
     end
 
     -- delete old tasks
-    task = box.space[tube_name .. "_deduplication"].index.created:min()
-    if task then
-        if task[dedup_index.created] < cur - time.DEDUPLICATION_TIME then
-            processed = processed + 1
-            estimated = 0
-            box.space[tube_name]:delete(tuple[1])
-        else
-            local e = time.sec(tonumber(task[dedup_index.created] - cur + time.DEDUPLICATION_TIME))
-            estimated = e < estimated and e or estimated
+    local dedup_space = box.space[tube_name .. "_deduplication"]
+    if dedup_space ~= nil then
+        task = dedup_space.index.created:min()
+        if task then
+            if task[dedup_index.created] < cur - time.DEDUPLICATION_TIME then
+                processed = processed + 1
+                estimated = 0
+                dedup_space:delete(tuple[1])
+            else
+                local e = time.sec(tonumber(task[dedup_index.created] - cur + time.DEDUPLICATION_TIME))
+                estimated = e < estimated and e or estimated
+            end
         end
     end
 
