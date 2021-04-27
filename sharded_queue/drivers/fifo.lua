@@ -9,6 +9,12 @@ local function update_stat(tube_name, name)
     statistics.update(tube_name, name, '+', 1)
 end
 
+local dedup_index = {
+    deduplication_id  = 1,
+    created           = 2,
+    bucket_id         = 3
+}
+
 local function fiber_iteration(tube_name)
     local cur  = time.cur()
     local estimated = time.DEDUPLICATION_TIME
@@ -17,7 +23,7 @@ local function fiber_iteration(tube_name)
     local cnt = 0
     for _, tuple in box.space[tube_name].index.created:pairs({cur - estimated}, {iterator = box.index.LT, limit = 1000}) do
         cnt = cnt + 1
-        box.space[tube_name]:delete(tuple[1])
+        box.space[tube_name]:delete(tuple[dedup_index.deduplication_id])
     end
 
     return cnt
