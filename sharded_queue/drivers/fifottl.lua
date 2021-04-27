@@ -118,7 +118,7 @@ local function fiber_iteration(tube_name, processed)
             if task[dedup_index.created] < cur - time.DEDUPLICATION_TIME then
                 processed = processed + 1
                 estimated = 0
-                dedup_space:delete(tuple[1])
+                dedup_space:delete(task[dedup_index.deduplication_id])
             else
                 local e = time.sec(tonumber(task[dedup_index.created] - cur + time.DEDUPLICATION_TIME))
                 estimated = e < estimated and e or estimated
@@ -254,9 +254,6 @@ local function tube_create(args)
             unique = false,
             if_not_exists = if_not_exists
         })
-
-        -- run fiber for deduplication event
-        fiber.create(fiber_common, args.name .. "_deduplication")
     end
 
     -- run fiber for tracking event
