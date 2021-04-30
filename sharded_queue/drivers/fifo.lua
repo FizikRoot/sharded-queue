@@ -17,14 +17,22 @@ local dedup_index = {
 
 local function fiber_iteration(tube_name)
     local cur  = time.cur()
-    local estimated = time.DEDUPLICATION_TIME
-
+    local timeout = time.DEDUPLICATION_TIME
     -- delete old tasks
     local cnt = 0
-    for _, tuple in box.space[tube_name].index.created:pairs({cur - estimated}, {iterator = box.index.LT, limit = 1000}) do
+    for _, tuple in box.space[tube_name].index.created:pairs({cur - timeout}, {iterator = box.index.LT, limit = 1000}) do
         cnt = cnt + 1
         box.space[tube_name]:delete(tuple[dedup_index.deduplication_id])
     end
+    timeout = time.sec(timeout)
+
+    local task = box.space[tube_name].index.created:min()
+    if task ~= nil then
+        local e = time.sec(tonumber(task[dedup_index.created] - cur + time.DEDUPLICATION_TIME))
+        timeout = e < timeout and e or timeout
+    end
+
+    fiber.sleep(timeout)
 
     return cnt
 end
@@ -39,19 +47,19 @@ local function fiber_common(tube_name)
                 return 1
             end
         else
-            fiber.sleep(0.1)
+            fiber.sleep(1)
         end
     end
 end
 
 local method = {}
 
-local function tube_create(opts)
+local function tube_create(args)
     local space_opts = {}
-    local if_not_exists = opts.if_not_exists or true
-    space_opts.temporary = opts.temporary or false
+    local if_not_exists = args.options.if_not_exists or true
+    space_opts.temporary = args.options.temporary or false
     space_opts.if_not_exists = if_not_exists
-    space_opts.engine = opts.engine or 'memtx'
+    space_opts.engine = args.options.engine or 'memtx'
     space_opts.format = {
         { name = 'task_id', type = 'unsigned' },
         { name = 'bucket_id', type = 'unsigned' },
@@ -60,7 +68,7 @@ local function tube_create(opts)
         { name = 'index', type = 'unsigned' }
     }
 
-    local space = box.schema.create_space(opts.name, space_opts)
+    local space = box.schema.create_space(args.name, space_opts)
     space:create_index('task_id', {
         type = 'tree',
         parts = { 'task_id' },
@@ -84,17 +92,17 @@ local function tube_create(opts)
         if_not_exists = if_not_exists
     })
 
-    if opts.content_based_deduplication == true then
+    if args.options.content_based_deduplication == true then
         local deduplication_opts = {}
-        deduplication_opts.temporary = opts.temporary or false
+        deduplication_opts.temporary = args.options.temporary or false
         deduplication_opts.if_not_exists = if_not_exists
-        deduplication_opts.engine = opts.engine or 'memtx'
+        deduplication_opts.engine = args.options.engine or 'memtx'
         deduplication_opts.format = {
             { name = 'deduplication_id', type = 'string' },
             { name = 'created', type = 'unsigned' },
             { name = 'bucket_id', type = 'unsigned' }
         }
-        local deduplication = box.schema.create_space(opts.name .. "_deduplication", deduplication_opts)
+        local deduplication = box.schema.create_space(args.name .. "_deduplication", deduplication_opts)
         deduplication:create_index('deduplication_id', {
             type = 'tree',
             parts = { 'deduplication_id' },
@@ -115,7 +123,7 @@ local function tube_create(opts)
         })
 
         -- run fiber for deduplication event
-        fiber.create(fiber_common, opts.name .. "_deduplication")
+        fiber.create(fiber_common, args.name .. "_deduplication")
     end
 
     return space
